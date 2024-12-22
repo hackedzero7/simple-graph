@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Graph Search</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .controls {
+            width: 300px;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        #result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f8f8;
+            border-radius: 4px;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+        }
+        .graph-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .graph-buttons button {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="panel controls">
+            <h3>Add Cities</h3>
+            <input type="text" id="fromCity" placeholder="From City">
+            <input type="text" id="toCity" placeholder="To City">
+            <input type="number" id="distance" placeholder="Distance">
+            <button onclick="addPath()">Add Path</button>
+            
+            <h3>Find Path</h3>
+            <input type="text" id="startCity" placeholder="Start City">
+            <input type="text" id="endCity" placeholder="End City">
+            <div class="graph-buttons">
+                <button onclick="findPath('bfs')">BFS</button>
+                <button onclick="findPath('dfs')">DFS</button>
+                <button onclick="findPath('ucs')">UCS</button>
+            </div>
+            <button onclick="resetGraph()" style="background: #f44336">Reset</button>
+            <div id="result"></div>
+        </div>
+        <div class="panel">
+            <canvas id="graphCanvas" width="600" height="400"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Graph data structure
+        const graph = {};
+        const positions = {};
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Helper Functions
+        function getRandomPosition() {
+            return {
+                x: Math.random() * (canvas.width - 100) + 50,
+                y: Math.random() * (canvas.height - 100) + 50
+            };
+        }
+
+        function drawGraph(path = []) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw edges
+            for (let city in graph) {
+                const fromPos = positions[city];
+                for (let edge of graph[city]) {
+                    const toPos = positions[edge.to];
+                    const isInPath = path.includes(city) && path.includes(edge.to) &&
+                                   Math.abs(path.indexOf(city) - path.indexOf(edge.to)) === 1;
+                    
+                    // Draw edge
+                    ctx.beginPath();
+                    ctx.moveTo(fromPos.x, fromPos.y);
+                    ctx.lineTo(toPos.x, toPos.y);
+                    ctx.strokeStyle = isInPath ? 'red' : '#999';
+                    ctx.lineWidth = isInPath ? 3 : 1;
+                    ctx.stroke();
+                    
+                    // Draw distance
+                    const midX = (fromPos.x + toPos.x) / 2;
+                    const midY = (fromPos.y + toPos.y) / 2;
+                    ctx.fillStyle = '#666';
+                    ctx.fillText(edge.distance, midX, midY);
+                }
+            }
+            
+            // Draw cities
+            for (let city in positions) {
+                const pos = positions[city];
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 20, 0, 2 * Math.PI);
+                ctx.fillStyle = path.includes(city) ? '#ffcccc' : 'white';
+                ctx.fill();
+                ctx.stroke();
+                ctx.fillStyle = 'black';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(city, pos.x, pos.y);
+            }
+        }
+
+        function addPath() {
+            const from = document.getElementById('fromCity').value.toUpperCase();
+            const to = document.getElementById('toCity').value.toUpperCase();
+            const distance = parseInt(document.getElementById('distance').value);
+
+            if (!from || !to || isNaN(distance)) {
+                alert('Please fill all fields correctly');
+                return;
+            }
+
+            // Initialize if cities don't exist
+            if (!graph[from]) graph[from] = [];
+            if (!graph[to]) graph[to] = [];
+            if (!positions[from]) positions[from] = getRandomPosition();
+            if (!positions[to]) positions[to] = getRandomPosition();
+
+            // Add bidirectional paths
+            graph[from].push({to, distance});
+            graph[to].push({to: from, distance});
+
+            drawGraph();
+            clearInputs();
+        }
+
+        function clearInputs() {
+            document.getElementById('fromCity').value = '';
+            document.getElementById('toCity').value = '';
+            document.getElementById('distance').value = '';
+        }
+
+        function resetGraph() {
+            Object.keys(graph).forEach(key => delete graph[key]);
+            Object.keys(positions).forEach(key => delete positions[key]);
+            document.getElementById('result').innerHTML = '';
+            clearInputs();
+            document.getElementById('startCity').value = '';
+            document.getElementById('endCity').value = '';
+            drawGraph();
+        }
+
+        // Search Algorithms
+        function bfs(start, end) {
+            const queue = [[start]];
+            const visited = [];
+
+            while (queue.length > 0) {
+                const path = queue.shift();
+                const city = path[path.length - 1];
+
+                if (city === end) return path;
+
+                if (!visited.includes(city)) {
+                    visited.push(city);
+                    for (let next of graph[city] || []) {
+                        if (!visited.includes(next.to)) {
+                            queue.push([...path, next.to]);
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        function dfs(start, end) {
+            const stack = [[start]];
+            const visited = [];
+
+            while (stack.length > 0) {
+                const path = stack.pop();
+                const city = path[path.length - 1];
+
+                if (city === end) return path;
+
+                if (!visited.includes(city)) {
+                    visited.push(city);
+                    for (let next of graph[city] || []) {
+                        if (!visited.includes(next.to)) {
+                            stack.push([...path, next.to]);
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        function ucs(start, end) {
+            const queue = [{path: [start], cost: 0}];
+            const visited = [];
+
+            while (queue.length > 0) {
+                queue.sort((a, b) => a.cost - b.cost);
+                const {path, cost} = queue.shift();
+                const city = path[path.length - 1];
+
+                if (city === end) return path;
+
+                if (!visited.includes(city)) {
+                    visited.push(city);
+                    for (let next of graph[city] || []) {
+                        if (!visited.includes(next.to)) {
+                            queue.push({
+                                path: [...path, next.to],
+                                cost: cost + next.distance
+                            });
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        function calculateDistance(path) {
+            let distance = 0;
+            for (let i = 0; i < path.length - 1; i++) {
+                const city = path[i];
+                const nextCity = path[i + 1];
+                const edge = graph[city].find(e => e.to === nextCity);
+                distance += edge.distance;
+            }
+            return distance;
+        }
+
+        function findPath(algorithm) {
+            const start = document.getElementById('startCity').value.toUpperCase();
+            const end = document.getElementById('endCity').value.toUpperCase();
+
+            if (!start || !end) {
+                alert('Please enter start and end cities');
+                return;
+            }
+
+            if (!graph[start] || !graph[end]) {
+                alert('One or both cities not found in graph');
+                return;
+            }
+
+            let path;
+            switch(algorithm) {
+                case 'bfs': path = bfs(start, end); break;
+                case 'dfs': path = dfs(start, end); break;
+                case 'ucs': path = ucs(start, end); break;
+            }
+
+            if (path) {
+                const distance = calculateDistance(path);
+                document.getElementById('result').innerHTML = 
+                    `Path: ${path.join(' → ')}<br>Distance: ${distance}km`;
+                drawGraph(path);
+            } else {
+                document.getElementById('result').innerHTML = 'No path found';
+            }
+        }
+
+        // Initial draw
+        drawGraph();
+    </script>
+</body>
+</html>
